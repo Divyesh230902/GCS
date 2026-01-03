@@ -309,25 +309,11 @@ Pillow>=9.5.0
 4. **Flexible retrieval paradigm** (Global/Local/Hybrid/Auto)
 5. **Bias-reduced medical image retrieval**
 
-### **Target Conference**: CHIIR'26 (Conference on Human Information Interaction and Retrieval)
-
 ---
 
 ## 🤝 **Citation**
 
-If you use this work, please cite:
-
-```bibtex
-@inproceedings{gcs2025,
-  title={Hierarchical GraphRAG for Medical Image Retrieval: 
-         A Microsoft GraphRAG Adaptation},
-  author={Your Name},
-  booktitle={CHIIR'26},
-  year={2026}
-}
-```
-
-Also cite the original Microsoft GraphRAG:
+Cite the original Microsoft GraphRAG:
 
 ```bibtex
 @misc{graphrag2024,
@@ -376,7 +362,7 @@ MIT License - See LICENSE file for details
 | Tests | ✅ Passing |
 | Baseline Implementation | ⏳ Pending |
 | Evaluation Framework | ⏳ Pending |
-| CHIIR'26 Paper | ⏳ In Progress |
+| Paper | ⏳ In Progress |
 
 ---
 
@@ -390,7 +376,7 @@ MIT License - See LICENSE file for details
 - [ ] Baseline implementations (FAISS, Basic RAG)
 - [ ] Comprehensive evaluation framework
 - [ ] User study for explainability
-- [ ] CHIIR'26 paper submission
+- [ ] Paper submission
 
 ---
 
@@ -403,4 +389,3 @@ MIT License - See LICENSE file for details
 <p align="center">
   <strong>🎉 Microsoft GraphRAG meets Medical Imaging 🏥</strong>
 </p>
-
