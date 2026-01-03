@@ -114,6 +114,22 @@ conda activate GCS
 pip install -r requirements.txt
 ```
 
+### 2. **Team Testing (Any Data Dump)**
+
+Build reusable artifacts from any folder structure (labeled or unlabeled):
+
+```bash
+python scripts/gcs_cli.py build --data-root data --data-root balanced_data --artifact artifacts/gcs_artifacts.pkl
+```
+
+Then run text and/or image queries:
+
+```bash
+python scripts/gcs_cli.py query --artifact artifacts/gcs_artifacts.pkl --text "similar MRI scans" --mode auto --top-k 10
+```
+
+More options: `docs/TEAM_TESTING.md`.
+
 ### 2. **Run Demo**
 
 ```bash

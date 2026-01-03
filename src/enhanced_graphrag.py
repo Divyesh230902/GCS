@@ -5,7 +5,9 @@ Implements Global/Local/Hybrid search modes for medical images
 
 import numpy as np
 import torch
-from typing import Dict, List, Tuple, Optional
+import os
+import pickle
+from typing import Any, Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -109,7 +111,45 @@ class EnhancedGraphRAGRetriever:
         print(f"   - Communities: {len(self.communities)}")
         print(f"   - Summaries: {len(self.community_summaries)}")
         print("=" * 60)
-    
+
+    def save(self, filepath: str, *, extra: Optional[Dict[str, Any]] = None) -> None:
+        """Persist a built enhanced graph + retrieval state for team testing."""
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
+        state = {
+            "artifact_version": 1,
+            "image_embeddings": self.image_embeddings,
+            "node_embeddings": self.node_embeddings,
+            "node_metadata": self.node_metadata,
+            "graph": self.graph.graph,
+            "communities": self.communities,
+            "community_summaries": self.community_summaries,
+            "extra": extra or {},
+        }
+        with open(filepath, "wb") as f:
+            pickle.dump(state, f)
+
+    @classmethod
+    def load(
+        cls,
+        filepath: str,
+        *,
+        clip_extractor: CLIPEmbeddingExtractor,
+        ssm_processor: SSMQueryProcessor,
+        graph: Optional[MedicalKnowledgeGraph] = None,
+    ) -> Tuple["EnhancedGraphRAGRetriever", Dict[str, Any]]:
+        """Load a persisted enhanced graph + retrieval state."""
+        with open(filepath, "rb") as f:
+            state = pickle.load(f)
+
+        instance = cls(clip_extractor=clip_extractor, ssm_processor=ssm_processor, graph=graph or MedicalKnowledgeGraph())
+        instance.image_embeddings = state.get("image_embeddings", [])
+        instance.node_embeddings = state.get("node_embeddings", {})
+        instance.node_metadata = state.get("node_metadata", {})
+        instance.communities = state.get("communities", {})
+        instance.community_summaries = state.get("community_summaries", {})
+        instance.graph.graph = state.get("graph", instance.graph.graph)
+        return instance, state.get("extra", {})
+
     def _build_base_graph(self,
                          image_embeddings: List[ImageEmbedding],
                          text_embeddings: Dict[str, np.ndarray]):
@@ -179,7 +219,8 @@ class EnhancedGraphRAGRetriever:
     def retrieve(self,
                 query: str,
                 top_k: int = 10,
-                search_mode: str = "auto") -> EnhancedRetrievalResult:
+                search_mode: str = "auto",
+                query_embedding: Optional[np.ndarray] = None) -> EnhancedRetrievalResult:
         """
         Enhanced retrieval with multiple search modes
         
@@ -195,7 +236,11 @@ class EnhancedGraphRAGRetriever:
         print(f"   Search mode: {search_mode}")
         
         # Process query with SSM
-        query_result = self.ssm_processor.process_query(query)
+        query_result = self.ssm_processor.process_query(query or "image query")
+
+        # Generate query embedding if not provided (text-only default)
+        if query_embedding is None:
+            query_embedding = self.clip_extractor.extract_text_embedding(query)
         
         # Determine search mode if auto
         if search_mode == "auto":
@@ -204,11 +249,11 @@ class EnhancedGraphRAGRetriever:
         
         # Route to appropriate search strategy
         if search_mode == "global":
-            result = self._global_search(query, query_result, top_k)
+            result = self._global_search(query, query_result, top_k, query_embedding=query_embedding)
         elif search_mode == "local":
-            result = self._local_search(query, query_result, top_k)
+            result = self._local_search(query, query_result, top_k, query_embedding=query_embedding)
         else:  # hybrid
-            result = self._hybrid_search(query, query_result, top_k)
+            result = self._hybrid_search(query, query_result, top_k, query_embedding=query_embedding)
         
         print(f"✅ Retrieved {len(result.retrieved_images)} results")
         return result
@@ -232,16 +277,15 @@ class EnhancedGraphRAGRetriever:
     def _global_search(self,
                       query: str,
                       query_result: QueryResult,
-                      top_k: int) -> EnhancedRetrievalResult:
+                      top_k: int,
+                      *,
+                      query_embedding: np.ndarray) -> EnhancedRetrievalResult:
         """
         Global search: Use community summaries for broad understanding
         Microsoft GraphRAG map-reduce approach
         """
         print("   Using GLOBAL search (community-based)...")
-        
-        # Generate query embedding
-        query_embedding = self.clip_extractor.extract_text_embedding(query)
-        
+
         # Step 1: Find relevant communities
         relevant_communities = self._find_relevant_communities(query_embedding, max_communities=5)
         
@@ -283,14 +327,13 @@ class EnhancedGraphRAGRetriever:
     def _local_search(self,
                      query: str,
                      query_result: QueryResult,
-                     top_k: int) -> EnhancedRetrievalResult:
+                     top_k: int,
+                     *,
+                     query_embedding: np.ndarray) -> EnhancedRetrievalResult:
         """
         Local search: Direct similarity search with entity-level details
         """
         print("   Using LOCAL search (entity-based)...")
-        
-        # Generate query embedding
-        query_embedding = self.clip_extractor.extract_text_embedding(query)
         
         # Direct similarity search
         similarities = []
@@ -310,12 +353,16 @@ class EnhancedGraphRAGRetriever:
         retrieved_images = []
         for node_id, sim in top_nodes:
             metadata = self.node_metadata[node_id]
+            merged_meta = dict(metadata.get("metadata", {}) or {})
+            if "user_tags" in metadata:
+                merged_meta["user_tags"] = metadata["user_tags"]
+            merged_meta["similarity"] = sim
             retrieved_images.append(ImageEmbedding(
                 image_path=metadata['image_path'],
                 embedding=self.node_embeddings[node_id],
                 class_label=metadata['class_label'],
                 dataset=metadata['dataset'],
-                metadata={'similarity': sim}
+                metadata=merged_meta
             ))
         
         # Generate reasoning path
@@ -345,15 +392,17 @@ class EnhancedGraphRAGRetriever:
     def _hybrid_search(self,
                       query: str,
                       query_result: QueryResult,
-                      top_k: int) -> EnhancedRetrievalResult:
+                      top_k: int,
+                      *,
+                      query_embedding: np.ndarray) -> EnhancedRetrievalResult:
         """
         Hybrid search: Combine global context with local precision
         """
         print("   Using HYBRID search (combined approach)...")
         
         # Get both global and local results
-        global_result = self._global_search(query, query_result, top_k // 2)
-        local_result = self._local_search(query, query_result, top_k // 2)
+        global_result = self._global_search(query, query_result, top_k // 2, query_embedding=query_embedding)
+        local_result = self._local_search(query, query_result, top_k // 2, query_embedding=query_embedding)
         
         # Combine results (deduplicate)
         combined_images = global_result.retrieved_images + local_result.retrieved_images
@@ -437,12 +486,16 @@ class EnhancedGraphRAGRetriever:
         retrieved_images = []
         for node_id, sim in candidates[:top_k]:
             metadata = self.node_metadata[node_id]
+            merged_meta = dict(metadata.get("metadata", {}) or {})
+            if "user_tags" in metadata:
+                merged_meta["user_tags"] = metadata["user_tags"]
+            merged_meta["similarity"] = sim
             retrieved_images.append(ImageEmbedding(
                 image_path=metadata['image_path'],
                 embedding=self.node_embeddings[node_id],
                 class_label=metadata['class_label'],
                 dataset=metadata['dataset'],
-                metadata={'similarity': sim}
+                metadata=merged_meta
             ))
         
         return retrieved_images
@@ -497,4 +550,3 @@ if __name__ == "__main__":
     print("Enhanced GraphRAG Retriever")
     print("Microsoft GraphRAG-inspired implementation for medical images")
     print("Features: Global/Local/Hybrid search with hierarchical communities")
-
