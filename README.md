@@ -32,7 +32,7 @@ User Query → SSM (Mamba) Query Processing → Search Mode Selection
                                                     ↓
                         CLIP Multimodal Embeddings
                                                     ↓
-                        Balanced Medical Datasets
+                        Image Data Dump (any structure)
 ```
 
 ---
@@ -61,6 +61,10 @@ User Query → SSM (Mamba) Query Processing → Search Mode Selection
 - ✅ **Balanced Sampling**: Bias-reduced data distribution
 - ✅ **Hierarchical Organization**: Clinically meaningful grouping
 
+### 🧪 **Team Testing**
+- ✅ **Data dump support**: index any directory layout (labeled or unlabeled)
+- ✅ **Low-code CLI**: build artifacts, run queries, propagate tags
+
 ---
 
 ## 📁 **Project Structure**
@@ -69,6 +73,7 @@ User Query → SSM (Mamba) Query Processing → Search Mode Selection
 GCS/
 ├── src/                          # Source code
 │   ├── clip_embeddings.py        # CLIP embedding extraction
+│   ├── data_dump.py              # Index arbitrary data-dump folders
 │   ├── ssm.py                    # Mamba SSM query processor
 │   ├── graphRAG.py               # Basic GraphRAG implementation
 │   ├── community_detection.py    # Hierarchical clustering
@@ -80,9 +85,10 @@ GCS/
 │   ├── test_enhanced_graphrag.py # Enhanced GraphRAG tests
 │   └── test_mamba_integration.py # Mamba integration tests
 ├── scripts/                      # Utility scripts
+│   ├── gcs_cli.py                # Team testing CLI (build/query/tag)
 │   └── balanced_sampling.py      # Dataset balancing
 ├── docs/                         # Documentation
-│   ├── README.md                 # This file
+│   ├── README.md                 # Additional docs index
 │   └── GRAPHRAG_APPROACH.md      # Detailed methodology
 ├── data/                         # Medical datasets
 │   ├── AlzheimerDataset/
@@ -90,9 +96,8 @@ GCS/
 │   ├── parkinsons_dataset_processed/
 │   └── ms_slices_central/
 ├── balanced_data/                # Balanced sampled datasets
-├── demo_enhanced_graphrag.py     # Quick demonstration
 ├── requirements.txt              # Dependencies
-└── IMPLEMENTATION_SUMMARY.md     # Implementation details
+└── run_tests.py                  # Test runner
 ```
 
 ---
@@ -128,20 +133,18 @@ Then run text and/or image queries:
 python scripts/gcs_cli.py query --artifact artifacts/gcs_artifacts.pkl --text "similar MRI scans" --mode auto --top-k 10
 ```
 
-More options: `docs/TEAM_TESTING.md`.
-
-### 2. **Run Demo**
+Single-shot tagging (propagate to nearest neighbors in embedding space):
 
 ```bash
-# Quick demo with synthetic data
-python demo_enhanced_graphrag.py
+python scripts/gcs_cli.py tag --artifact artifacts/gcs_artifacts.pkl --image /path/to/seed.jpg --tag "review_me" --k 50
 ```
+
+More options: `docs/TEAM_TESTING.md`.
 
 ### 3. **Run Full Test**
 
 ```bash
-# Comprehensive test (requires real data)
-python tests/test_enhanced_graphrag.py
+python run_tests.py
 ```
 
 ### 4. **Use in Your Code**
@@ -187,7 +190,9 @@ print(f"Reasoning: {result.reasoning_path}")
 
 ## 📊 **Datasets**
 
-### **4 Medical Image Datasets**:
+The repository includes example medical datasets under `data/` and `balanced_data/`, but the team-testing CLI also supports arbitrary folders (see `docs/TEAM_TESTING.md`).
+
+### **Example Medical Datasets**:
 
 1. **Alzheimer's Dataset** (86,437 images)
    - Classes: Non Demented, Very Mild, Mild, Moderate
@@ -284,9 +289,8 @@ Each dataset is balanced to ensure equal representation of classes, reducing bia
 
 ## 📚 **Documentation**
 
-- **`IMPLEMENTATION_SUMMARY.md`**: Detailed implementation status
 - **`docs/GRAPHRAG_APPROACH.md`**: Comprehensive methodology explanation
-- **`PROJECT_STRUCTURE.md`**: Directory organization
+- **`docs/TEAM_TESTING.md`**: Low-code build/query/tag workflow
 - **Code Documentation**: Inline docstrings in all modules
 
 ---
